@@ -196,9 +196,9 @@ class GameWorld extends ChangeNotifier {
     } else if (dir == 0) {
       acc = onG ? (ice ? 220.0 : 1700.0) : 450.0;
     } else if (reversing) {
-      acc = onG ? (ice ? 500.0 : 2600.0) : 1500.0;
+      acc = onG ? (ice ? 500.0 : 2600.0) : 1800.0;
     } else {
-      acc = onG ? (ice ? 520.0 : 1150.0) : 950.0;
+      acc = onG ? (ice ? 520.0 : 1250.0) : 1500.0;
     }
     if (h.vx < target) {
       h.vx = math.min(target, h.vx + acc * dt);
@@ -221,11 +221,14 @@ class GameWorld extends ChangeNotifier {
       h.coyote = 0;
       h.onGround = false;
       h.jumpCut = false;
+      h.jumpT = 0;
       h.slideT = 0;
       Sfx.play('jump');
     }
-    if (!input.jumpHeld && !h.jumpCut && h.vy < 0) {
-      h.vy *= 0.45;
+    h.jumpT += dt;
+    // Qisqa bosishda ham yetarli balandlik: kesish faqat 0.16 soniyadan keyin.
+    if (!input.jumpHeld && !h.jumpCut && h.vy < 0 && h.jumpT > 0.16) {
+      h.vy *= 0.5;
       h.jumpCut = true;
     }
 
@@ -511,8 +514,9 @@ class GameWorld extends ChangeNotifier {
       _burst(e.cx, e.y + e.h * 0.5, const Color(0xFFFFFFFF), 8);
     }
     if (bounce) {
-      hero.vy = input.jumpHeld ? -540 : -420;
+      hero.vy = input.jumpHeld ? -560 : -440;
       hero.jumpCut = false;
+      hero.jumpT = 1;
       hero.onGround = false;
     }
   }

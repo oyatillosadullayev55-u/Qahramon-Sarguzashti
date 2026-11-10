@@ -29,7 +29,7 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
         fit: StackFit.expand,
         children: [
           Image.asset(Sprites.path('bg_env'), fit: BoxFit.cover),
-          Container(color: const Color(0x88050B22)),
+          Container(color: const Color(0x44050B22)),
           SafeArea(
             child: Stack(
               children: [

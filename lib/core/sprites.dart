@@ -8,7 +8,7 @@ class Sprites {
 
   static const List<String> names = [
     // qahramon pozalari
-    'hero_idle', 'hero_run', 'hero_jump', 'hero_attack', 'hero_hurt',
+    'hero_idle', 'hero_run', 'hero_run_body', 'hero_run_legr', 'hero_run_legl', 'hero_jump', 'hero_attack', 'hero_hurt',
     'hero_die', 'hero_slide', 'hero_celebrate',
     // yig'iladigan narsalar
     'coin', 'star', 'heart', 'gem', 'key', 'shield', 'magnet', 'bolt', 'potion',

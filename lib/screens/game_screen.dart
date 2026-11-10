@@ -44,9 +44,13 @@ class _GameScreenState extends State<GameScreen>
   void _tick(Duration elapsed) {
     var dt = (elapsed - _last).inMicroseconds / 1000000.0;
     _last = elapsed;
-    if (dt > 1 / 30) dt = 1 / 30;
     if (dt < 0) dt = 0;
-    world.update(dt);
+    if (dt > 0.1) dt = 0.1;
+    // Kadr sekin bo'lsa ham o'yin tezligi o'zgarmasligi uchun kichik qadamlarga bo'linadi.
+    final n = (dt * 60).ceil().clamp(1, 6).toInt();
+    for (int i = 0; i < n; i++) {
+      world.update(dt / n);
+    }
   }
 
   @override

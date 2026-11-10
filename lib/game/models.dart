@@ -82,6 +82,7 @@ class Hero {
   bool onIce = false;
   double facing = 1;
   double coyote = 0;
+  double jumpT = 1; // sakrashdan beri o'tgan vaqt
   double jumpBuf = 0;
   bool jumpCut = false;
   double invul = 0;

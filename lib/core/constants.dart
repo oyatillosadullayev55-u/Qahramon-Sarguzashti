@@ -4,15 +4,15 @@ class G {
   G._();
 
   static const double viewH = 360;
-  static const double gravity = 1500;
+  static const double gravity = 1400;
   static const double groundY = 300;
 
   static const double heroW = 26;
   static const double heroH = 58;
-  static const double jumpV = 590;
-  static const double superJumpV = 740;
-  static const double runSpeed = 170;
-  static const double boltSpeed = 250;
+  static const double jumpV = 620;
+  static const double superJumpV = 780;
+  static const double runSpeed = 190;
+  static const double boltSpeed = 270;
 
   static const int levelCount = 5;
   static const int maxLives = 5;

@@ -15,11 +15,11 @@ class GamePainter extends CustomPainter {
   final GameWorld w;
 
   final Paint _paint = Paint()
-    ..filterQuality = FilterQuality.medium
+    ..filterQuality = FilterQuality.low
     ..isAntiAlias = true;
 
   final Paint _gray = Paint()
-    ..filterQuality = FilterQuality.medium
+    ..filterQuality = FilterQuality.low
     ..isAntiAlias = true
     ..colorFilter = const ColorFilter.matrix(<double>[
       0.26, 0.26, 0.26, 0, 0, //
@@ -282,17 +282,16 @@ class GamePainter extends CustomPainter {
       sy = 1 + st;
       sx = 1 - st * 0.6;
     } else if (frame == 'hero_run') {
-      final ph = math.sin(h.stride * math.pi / 2);
+      final ph = math.sin(h.stride * 1.1);
       bob = ph.abs() * 3.0 * speedK;
-      wobble = ph * 0.05 * speedK;
-      sy = 1 + (0.5 - ph.abs()) * 0.05 * speedK;
+      wobble = ph * 0.04 * speedK;
     } else if (frame == 'hero_idle') {
       sy = 1 + math.sin(w.time * 3) * 0.012; // nafas olish
     }
 
     final blink = h.invul > 0 && (h.invul * 10).floor().isEven;
     final p = Paint()
-      ..filterQuality = FilterQuality.medium
+      ..filterQuality = FilterQuality.low
       ..isAntiAlias = true
       ..color = Color.fromRGBO(255, 255, 255, blink ? 0.35 : 1.0);
 
@@ -301,7 +300,29 @@ class GamePainter extends CustomPainter {
     c.rotate(h.lean + wobble);
     c.scale(sx * h.visFacing, sy);
     final src = Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
-    c.drawImageRect(img, src, Rect.fromLTWH(-ww * ax, -hh, ww, hh), p);
+    final dst = Rect.fromLTWH(-ww * ax, -hh, ww, hh);
+    if (frame == 'hero_run') {
+      // Oyoqlar navbat bilan harakatlanadi (ikki oyoqda yurish)
+      final amp = (speedK * 1.2).clamp(0.35, 1.0).toDouble();
+      final a = 0.45 * (1 + math.sin(h.stride * 1.1) * amp);
+      const k = _heroScale;
+      final pR = Offset(dst.left + 104 * k, dst.top + 138 * k);
+      final pL = Offset(dst.left + 72 * k, dst.top + 138 * k);
+      void leg(ui.Image im, Offset pv, double ang) {
+        c.save();
+        c.translate(pv.dx, pv.dy);
+        c.rotate(ang);
+        c.translate(-pv.dx, -pv.dy);
+        c.drawImageRect(im, src, dst, p);
+        c.restore();
+      }
+
+      leg(Sprites.get('hero_run_legl'), pL, -a);
+      leg(Sprites.get('hero_run_legr'), pR, a);
+      c.drawImageRect(Sprites.get('hero_run_body'), src, dst, p);
+    } else {
+      c.drawImageRect(img, src, dst, p);
+    }
     c.restore();
 
     // Qalqon pufagi

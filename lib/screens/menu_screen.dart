@@ -84,7 +84,7 @@ class _MenuScreenState extends State<MenuScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Color(0x66050B22), Color(0x99050B22)],
+                colors: [Color(0x1A050B22), Color(0x66050B22)],
               ),
             ),
           ),

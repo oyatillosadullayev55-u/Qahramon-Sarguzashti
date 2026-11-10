@@ -55,7 +55,7 @@ class LevelBuilder {
     bool first = true;
 
     while (true) {
-      if (!first) x += 56 + rnd.nextInt(24 + index * 8);
+      if (!first) x += 64 + rnd.nextInt(28 + index * 10);
       if (!first && x >= target) break;
 
       final segW = first ? 720.0 : 300.0 + rnd.nextInt(380);
@@ -135,7 +135,7 @@ class LevelBuilder {
             arc(cx, gy - 62, 3);
             break;
           case 4:
-            final py = gy - 82 - rnd.nextInt(14).toDouble();
+            final py = gy - 72 - rnd.nextInt(14).toDouble();
             solids.add(Solid(
               Rect.fromLTWH(cx - pw / 2, py, pw, 16),
               SolidKind.platform,

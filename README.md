@@ -12,6 +12,12 @@ flutter run
 ```
 > Bu v1 dan alohida loyiha (`super_adventure`). Eskisini almashtirmaydi.
 
+## Tezlik haqida
+Debug rejimida (`flutter run`) o'yin ancha sekin ishlaydi. Haqiqiy tezlikni ko'rish uchun:
+```bash
+flutter run --release
+```
+
 ## Boshqaruv
 - **Telefon:** ◀ ▶ (yurish), katta to'q sariq tugma (sakrash), qizil ⚡ (hujum), binafsha ⏬ (sirpanish).
 - **Kompyuter:** ← → / A D yurish, Space / ↑ / W sakrash, J yoki X hujum, S yoki ↓ sirpanish, Esc / P pauza.
