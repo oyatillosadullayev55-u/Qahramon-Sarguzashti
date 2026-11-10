@@ -1,7 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../core/audio.dart';
 import '../core/constants.dart';
@@ -38,19 +38,36 @@ class GameWorld extends ChangeNotifier {
 
   int lives = G.startLives;
   int score = 0;
+  int gems = 0;
   int hits = 0;
   int starsEarned = 0;
+  bool hasKey = false;
+  bool shield = false;
+  bool chestOpened = false;
+  double chestT = 0;
+
+  // Holatlar
+  bool dying = false;
+  double dyingT = 0;
+  bool winning = false;
+  double winT = 0;
+  bool _walletSaved = false;
+
+  String toast = '';
+  double toastT = 0;
 
   double time = 0;
   double camX = 0;
+  double camBias = 0.35;
   double viewW = 640;
   double magnetT = 0;
   double boltT = 0;
   double potionT = 0;
-  double _fxT = 0;
   double shake = 0;
-  double camBias = 0.35;
+  double _fxT = 0;
   int _hk = -1;
+
+  bool get locked => dying || winning;
 
   // ---------------------------------------------------------------- control
   void pause() {
@@ -63,6 +80,12 @@ class GameWorld extends ChangeNotifier {
     if (phase.value == GamePhase.paused) phase.value = GamePhase.playing;
   }
 
+  void _say(String text) {
+    toast = text;
+    toastT = 1.6;
+    hudTick.value++;
+  }
+
   // ----------------------------------------------------------------- update
   void update(double dt) {
     if (phase.value != GamePhase.playing) return;
@@ -70,10 +93,28 @@ class GameWorld extends ChangeNotifier {
     time += dt;
 
     _updateHero(dt);
-    if (phase.value == GamePhase.playing) {
+
+    if (dying) {
+      dyingT -= dt;
+      if (dyingT <= 0) _finishLose();
+    } else if (winning) {
+      winT -= dt;
+      if (winT <= 0) {
+        _saveWallet();
+        phase.value = GamePhase.won;
+      }
+    } else if (phase.value == GamePhase.playing) {
+      _updateAttack();
       _updateEnemies(dt);
+      _updateHazards();
       _updatePickups(dt);
+      _updateChest(dt);
       _checkGoal();
+    }
+
+    if (toastT > 0) {
+      toastT -= dt;
+      if (toastT <= 0) hudTick.value++;
     }
     _updateBlocks(dt);
     _updateEffects(dt);
@@ -84,12 +125,14 @@ class GameWorld extends ChangeNotifier {
 
   String get heroFrame {
     final h = hero;
+    if (dying) return 'hero_die';
+    if (winning) return 'hero_celebrate';
+    if (h.hurtT > 0) return 'hero_hurt';
+    if (h.attackT > 0) return 'hero_attack';
+    if (h.slideT > 0) return 'hero_slide';
     if (!h.onGround) return 'hero_jump';
     if (h.skid) return 'hero_idle';
-    if (h.vx.abs() > 12) {
-      const seq = ['hero_run1', 'hero_run2', 'hero_run3', 'hero_run2'];
-      return seq[h.stride.floor() % 4];
-    }
+    if (h.vx.abs() > 12) return 'hero_run';
     return 'hero_idle';
   }
 
@@ -108,69 +151,54 @@ class GameWorld extends ChangeNotifier {
     }
   }
 
-  /// Yurish animatsiyasi: qadam fazasi, burilish, og'ish, chang va yerga tushish.
-  void _animateHero(double dt, bool wasGround, double vyBefore) {
-    final h = hero;
-    final feetY = h.y + G.heroH;
-
-    // Qadam fazasi: bosilgan masofaga mutanosib (oyoq yerda sirpanmaydi).
-    if (h.onGround) {
-      h.stride += h.vx.abs() * dt / 15.0;
-      final idx = h.stride.floor();
-      if (idx != h.stepIdx) {
-        h.stepIdx = idx;
-        if (h.vx.abs() > 70 && idx.isEven) {
-          _dust(h.cx - h.facing * 9, feetY - 2, -h.facing, 1, power: 0.6);
-        }
-      }
-    } else {
-      h.stride = h.stride.floorToDouble();
-    }
-
-    // Burilish: scaleX -1..1 oralig'ida silliq o'tadi.
-    h.visFacing += (h.facing - h.visFacing) * math.min(1.0, dt * 18);
-    if ((h.facing - h.visFacing).abs() < 0.02) h.visFacing = h.facing;
-
-    // Tana og'ishi: yugurganda oldinga, tormozlanganda orqaga.
-    final speedK = (h.vx / G.boltSpeed).clamp(-1.0, 1.0).toDouble();
-    double targetLean = speedK * 0.13;
-    if (h.skid) targetLean = -h.facing * 0.2;
-    if (!h.onGround) targetLean = speedK * 0.07 + (h.vy / 4000).clamp(-0.06, 0.06).toDouble() * h.facing;
-    h.lean += (targetLean - h.lean) * math.min(1.0, dt * 12);
-
-    // Sirpanishda chang
-    if (h.skid) {
-      h.dustT -= dt;
-      if (h.dustT <= 0) {
-        h.dustT = 0.035;
-        _dust(h.cx, feetY - 2, -h.facing, 2, power: 1.2);
-      }
-    }
-
-    // Yerga tushish
-    if (h.landT > 0) h.landT = math.max(0.0, h.landT - dt);
-    if (h.onGround && !wasGround && vyBefore > 260) {
-      h.landT = 0.14;
-      _dust(h.cx - 8, feetY - 2, -1, 3);
-      _dust(h.cx + 8, feetY - 2, 1, 3);
-    }
-  }
-
   void _updateHero(double dt) {
     final h = hero;
     final maxSpeed = boltT > 0 ? G.boltSpeed : G.runSpeed;
-    final dir = (input.right ? 1.0 : 0.0) - (input.left ? 1.0 : 0.0);
+    final isLocked = locked;
+
+    // Jang taymerlari
+    if (h.attackT > 0) h.attackT = math.max(0.0, h.attackT - dt);
+    if (h.attackCd > 0) h.attackCd -= dt;
+    if (h.slideT > 0) h.slideT = math.max(0.0, h.slideT - dt);
+    if (h.slideCd > 0) h.slideCd -= dt;
+    if (h.hurtT > 0) h.hurtT = math.max(0.0, h.hurtT - dt);
+
+    final wantAttack = input.consumeAttack();
+    final wantSlide = input.consumeSlide();
+    if (!isLocked) {
+      if (wantAttack && h.attackCd <= 0 && h.slideT <= 0) {
+        h.attackT = 0.28;
+        h.attackCd = 0.42;
+        Sfx.play('slash');
+      }
+      if (wantSlide && h.slideCd <= 0 && h.onGround && h.attackT <= 0) {
+        h.slideT = 0.55;
+        h.slideCd = 0.95;
+        h.vx = h.facing * math.max(maxSpeed * 1.2, h.vx.abs());
+        Sfx.play('jump');
+      }
+    }
+    if (h.slideT > 0 && !h.onGround) h.slideT = 0;
+    final sliding = h.slideT > 0;
+
+    double dir = 0;
+    if (!isLocked && !sliding) {
+      dir = (input.right ? 1.0 : 0.0) - (input.left ? 1.0 : 0.0);
+    }
     final target = dir * maxSpeed;
     final onG = h.onGround;
+    final ice = onG && h.onIce;
     final reversing = dir != 0 && h.vx != 0 && h.vx * dir < 0;
-    h.skid = onG && reversing && h.vx.abs() > 80;
+    h.skid = onG && reversing && h.vx.abs() > 80 && !ice;
     double acc;
-    if (dir == 0) {
-      acc = onG ? 1700.0 : 450.0;
+    if (sliding) {
+      acc = 430.0;
+    } else if (dir == 0) {
+      acc = onG ? (ice ? 220.0 : 1700.0) : 450.0;
     } else if (reversing) {
-      acc = onG ? 2600.0 : 1500.0;
+      acc = onG ? (ice ? 500.0 : 2600.0) : 1500.0;
     } else {
-      acc = onG ? 1150.0 : 950.0;
+      acc = onG ? (ice ? 520.0 : 1150.0) : 950.0;
     }
     if (h.vx < target) {
       h.vx = math.min(target, h.vx + acc * dt);
@@ -181,17 +209,19 @@ class GameWorld extends ChangeNotifier {
 
     // Sakrash (coyote time + buffer)
     h.coyote = h.onGround ? 0.1 : h.coyote - dt;
-    if (input.consumeJump()) {
+    final jumpPressed = input.consumeJump();
+    if (!isLocked && jumpPressed) {
       h.jumpBuf = 0.12;
     } else {
       h.jumpBuf -= dt;
     }
-    if (h.jumpBuf > 0 && h.coyote > 0) {
+    if (h.jumpBuf > 0 && h.coyote > 0 && !isLocked) {
       h.vy = potionT > 0 ? -G.superJumpV : -G.jumpV;
       h.jumpBuf = 0;
       h.coyote = 0;
       h.onGround = false;
       h.jumpCut = false;
+      h.slideT = 0;
       Sfx.play('jump');
     }
     if (!input.jumpHeld && !h.jumpCut && h.vy < 0) {
@@ -237,6 +267,7 @@ class GameWorld extends ChangeNotifier {
     final vyBefore = h.vy;
     h.y += h.vy * dt;
     h.onGround = false;
+    h.onIce = false;
     r = h.rect;
     for (final s in level.solids) {
       final sr = s.rect;
@@ -256,6 +287,7 @@ class GameWorld extends ChangeNotifier {
         h.y = sr.top - G.heroH;
         h.vy = 0;
         h.onGround = true;
+        h.onIce = s.kind == SolidKind.ice;
         if (s.kind == SolidKind.ground && sr.width > 150) {
           h.respawnX = math.min(math.max(h.x, sr.left + 40), sr.right - 60);
           if (h.respawnX < sr.left + 40) h.respawnX = sr.left + 40;
@@ -272,7 +304,7 @@ class GameWorld extends ChangeNotifier {
 
     // Yiqilib ketdi
     if (h.y > G.viewH + 80) {
-      _fall();
+      if (!dying && !winning) _fall();
       return;
     }
 
@@ -298,6 +330,53 @@ class GameWorld extends ChangeNotifier {
     }
   }
 
+  /// Yurish animatsiyasi: qadam fazasi, burilish, og'ish, chang va yerga tushish.
+  void _animateHero(double dt, bool wasGround, double vyBefore) {
+    final h = hero;
+    final feetY = h.y + G.heroH;
+
+    if (h.onGround) {
+      h.stride += h.vx.abs() * dt / 15.0;
+      final idx = h.stride.floor();
+      if (idx != h.stepIdx) {
+        h.stepIdx = idx;
+        if (h.vx.abs() > 70 && idx.isEven && h.slideT <= 0) {
+          _dust(h.cx - h.facing * 9, feetY - 2, -h.facing, 1, power: 0.6);
+        }
+      }
+    } else {
+      h.stride = h.stride.floorToDouble();
+    }
+
+    h.visFacing += (h.facing - h.visFacing) * math.min(1.0, dt * 18);
+    if ((h.facing - h.visFacing).abs() < 0.02) h.visFacing = h.facing;
+
+    final speedK = (h.vx / G.boltSpeed).clamp(-1.0, 1.0).toDouble();
+    double targetLean = speedK * 0.12;
+    if (h.skid) targetLean = -h.facing * 0.2;
+    if (h.slideT > 0 || h.attackT > 0 || dying || winning) targetLean = 0;
+    if (!h.onGround) {
+      targetLean = speedK * 0.07 + (h.vy / 4000).clamp(-0.06, 0.06).toDouble() * h.facing;
+    }
+    h.lean += (targetLean - h.lean) * math.min(1.0, dt * 12);
+
+    if (h.skid || h.slideT > 0) {
+      h.dustT -= dt;
+      if (h.dustT <= 0) {
+        h.dustT = 0.035;
+        _dust(h.cx - h.facing * (h.slideT > 0 ? 14 : 0), feetY - 2, -h.facing, 2,
+            power: 1.2);
+      }
+    }
+
+    if (h.landT > 0) h.landT = math.max(0.0, h.landT - dt);
+    if (h.onGround && !wasGround && vyBefore > 260) {
+      h.landT = 0.14;
+      _dust(h.cx - 8, feetY - 2, -1, 3);
+      _dust(h.cx + 8, feetY - 2, 1, 3);
+    }
+  }
+
   void _hitBlock(Solid s) {
     if (s.used) return;
     s.used = true;
@@ -316,13 +395,19 @@ class GameWorld extends ChangeNotifier {
     _burst(cx, s.rect.top, const Color(0xFFFFC83D), 8);
   }
 
+  // ------------------------------------------------------------ hurt / death
+  void _haptic() {
+    if (Progress.vibration) HapticFeedback.mediumImpact();
+  }
+
   void _fall() {
     lives--;
     hits++;
     Sfx.play('hurt');
+    _haptic();
     shake = 0.3;
     if (lives <= 0) {
-      _lose();
+      _finishLose();
       return;
     }
     hero.x = hero.respawnX;
@@ -333,28 +418,59 @@ class GameWorld extends ChangeNotifier {
     hero.jumpCut = true;
   }
 
-  void _hurt(Enemy e) {
-    if (hero.invul > 0) return;
+  void _hurtAt(double sourceCx) {
+    if (hero.invul > 0 || locked) return;
+    if (shield) {
+      shield = false;
+      hero.invul = 1.0;
+      hero.vy = -240;
+      hero.vx = (hero.cx < sourceCx ? -1 : 1) * 160.0;
+      hero.onGround = false;
+      Sfx.play('block');
+      _burst(hero.cx, hero.cy, const Color(0xFF55C8FF), 14);
+      return;
+    }
     lives--;
     hits++;
     Sfx.play('hurt');
+    _haptic();
     shake = 0.3;
     _burst(hero.cx, hero.cy, const Color(0xFFFF4A4A), 10);
+    hero.slideT = 0;
+    hero.attackT = 0;
     if (lives <= 0) {
-      _lose();
+      _startDying(sourceCx);
       return;
     }
     hero.invul = 1.6;
+    hero.hurtT = 0.4;
     hero.vy = -320;
-    hero.vx = (hero.cx < e.cx ? -1 : 1) * 220.0;
+    hero.vx = (hero.cx < sourceCx ? -1 : 1) * 220.0;
     hero.jumpCut = true;
     hero.onGround = false;
   }
 
-  void _lose() {
+  void _startDying(double sourceCx) {
+    dying = true;
+    dyingT = 1.1;
+    input.clear();
+    hero.vy = -260;
+    hero.vx = (hero.cx < sourceCx ? -1 : 1) * 120.0;
+    hero.onGround = false;
     Sfx.play('lose');
+  }
+
+  void _finishLose() {
+    if (phase.value == GamePhase.lost) return;
+    _saveWallet();
     input.clear();
     phase.value = GamePhase.lost;
+  }
+
+  void _saveWallet() {
+    if (_walletSaved) return;
+    _walletSaved = true;
+    Progress.addWallet(score, gems);
   }
 
   void _checkGoal() {
@@ -368,11 +484,48 @@ class GameWorld extends ChangeNotifier {
       Progress.complete(levelIndex, s, score);
       Sfx.play('win');
       input.clear();
-      phase.value = GamePhase.won;
+      winning = true;
+      winT = 1.0;
+      hero.invul = 0;
     }
   }
 
-  // ---------------------------------------------------------------- enemies
+  // ----------------------------------------------------------------- combat
+  void _damageEnemy(Enemy e, {bool bounce = false}) {
+    if (e.hp > 1) {
+      e.hp--;
+      e.hitCd = 0.9;
+      shake = 0.25;
+      Sfx.play('boss');
+      _burst(e.cx, e.y + 10, const Color(0xFFFFD83A), 14);
+    } else {
+      e.dead = true;
+      if (e.boss) {
+        shake = 0.5;
+        score += 10;
+        _burst(e.cx, e.y + e.h * 0.5, const Color(0xFFFFD83A), 30);
+      } else {
+        score += 1;
+      }
+      Sfx.play('stomp');
+      _burst(e.cx, e.y + e.h * 0.5, const Color(0xFFFFFFFF), 8);
+    }
+    if (bounce) {
+      hero.vy = input.jumpHeld ? -540 : -420;
+      hero.jumpCut = false;
+      hero.onGround = false;
+    }
+  }
+
+  void _updateAttack() {
+    if (hero.attackT <= 0) return;
+    final ar = hero.attackRect;
+    for (final e in level.enemies) {
+      if (e.dead || (e.boss && e.hitCd > 0)) continue;
+      if (ar.overlaps(e.rect)) _damageEnemy(e);
+    }
+  }
+
   void _updateEnemies(double dt) {
     final h = hero;
     for (final e in level.enemies) {
@@ -405,34 +558,29 @@ class GameWorld extends ChangeNotifier {
 
       final er = e.rect;
       if (e.boss && e.hitCd > 0) continue;
-      if (!h.rect.overlaps(er)) continue;
+      if (!h.hurtRect.overlaps(er)) continue;
       final cameFromAbove = h.vy > 0 && h.prevBottom <= er.top + (e.boss ? 24 : 12);
       if (e.stompable && cameFromAbove) {
-        h.vy = input.jumpHeld ? -540 : -420;
-        h.jumpCut = false;
-        h.onGround = false;
-        if (e.hp > 1) {
-          e.hp--;
-          e.hitCd = 0.9;
-          shake = 0.25;
-          Sfx.play('boss');
-          _burst(e.cx, e.y + 10, const Color(0xFFFFD83A), 14);
-        } else {
-          e.dead = true;
-          if (e.boss) {
-            shake = 0.5;
-            score += 10;
-            _burst(e.cx, e.y + e.h * 0.5, const Color(0xFFFFD83A), 30);
-          }
-          Sfx.play('stomp');
-          _burst(e.cx, e.y + e.h * 0.5, const Color(0xFFFFFFFF), 8);
-        }
+        _damageEnemy(e, bounce: true);
+      } else if (h.slideT > 0 && e.stompable && !e.boss) {
+        _damageEnemy(e); // sirpanib urib yuborish
       } else {
-        _hurt(e);
-        if (phase.value != GamePhase.playing) return;
+        _hurtAt(e.cx);
+        if (dying) return;
       }
     }
     level.enemies.removeWhere((e) => e.dead && e.deadT > 0.4);
+  }
+
+  void _updateHazards() {
+    final hr = hero.hurtRect.deflate(3);
+    for (final z in level.hazards) {
+      if (z.right < hero.x - 40 || z.left > hero.x + 60) continue;
+      if (hr.overlaps(z.deflate(4))) {
+        _hurtAt(z.center.dx);
+        return;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- pickups
@@ -473,16 +621,21 @@ class GameWorld extends ChangeNotifier {
   void _collect(Pickup p) {
     p.collected = true;
     Color c = const Color(0xFFFFD83A);
+    String snd = 'power';
     switch (p.type) {
       case PickupType.coin:
         score += 1;
+        snd = 'coin';
         break;
       case PickupType.star:
         score += 3;
+        snd = 'coin';
         break;
       case PickupType.gem:
         score += 5;
+        gems += 1;
         c = const Color(0xFF55C8FF);
+        snd = 'coin';
         break;
       case PickupType.heart:
         if (lives < G.maxLives) lives++;
@@ -499,11 +652,37 @@ class GameWorld extends ChangeNotifier {
         potionT = 8;
         c = const Color(0xFF55C8FF);
         break;
+      case PickupType.shield:
+        shield = true;
+        c = const Color(0xFF55C8FF);
+        break;
+      case PickupType.key:
+        hasKey = true;
+        snd = 'key';
+        _say('Kalit topildi!');
+        break;
     }
-    Sfx.play(p.type == PickupType.coin || p.type == PickupType.star || p.type == PickupType.gem
-        ? 'coin'
-        : 'power');
+    Sfx.play(snd);
     _burst(p.cx, p.cy, c, 7);
+  }
+
+  void _updateChest(double dt) {
+    if (chestOpened) {
+      chestT += dt;
+      return;
+    }
+    if (!hero.rect.overlaps(level.chest.inflate(6))) return;
+    if (hasKey) {
+      chestOpened = true;
+      score += 15;
+      gems += 3;
+      shake = 0.2;
+      Sfx.play('chest');
+      _burst(level.chest.center.dx, level.chest.top, const Color(0xFFFFD83A), 28);
+      _say('Sandiq ochildi! +15 ball, +3 olmos');
+    } else if (toastT <= 0) {
+      _say('Sandiqni ochish uchun kalit kerak!');
+    }
   }
 
   // ---------------------------------------------------------------- effects
@@ -537,7 +716,6 @@ class GameWorld extends ChangeNotifier {
     if (!viewW.isFinite || viewW <= 0) viewW = 640;
     if (!camX.isFinite) camX = 0;
     final maxCam = math.max(0.0, level.length - viewW);
-    // Qayerga qarasa, o'sha tomonga ko'proq joy qoldiradi (orqaga yurganda ham).
     final wantBias = hero.facing >= 0 ? 0.35 : 0.62;
     camBias += (wantBias - camBias) * math.min(1.0, dt * 2.5);
     final target = (hero.x - viewW * camBias).clamp(0.0, maxCam).toDouble();
@@ -545,7 +723,8 @@ class GameWorld extends ChangeNotifier {
   }
 
   void _syncHud() {
-    final k = Object.hash(lives, score, magnetT.ceil(), boltT.ceil(), potionT.ceil());
+    final k = Object.hash(lives, score, gems, hasKey, shield, magnetT.ceil(), boltT.ceil(),
+        potionT.ceil());
     if (k != _hk) {
       _hk = k;
       hudTick.value++;

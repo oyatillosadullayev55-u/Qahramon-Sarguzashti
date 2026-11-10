@@ -10,17 +10,18 @@ class LevelBuilder {
 
   static const List<String> backgrounds = [
     'bg_day',
-    'bg_night',
     'bg_forest',
-    'bg_day',
+    'bg_env',
     'bg_night',
+    'bg_env',
   ];
 
   static LevelData build(int index) {
-    final rnd = Random(4242 + index * 131);
+    final rnd = Random(7001 + index * 173);
     final solids = <Solid>[];
     final pickups = <Pickup>[];
     final enemies = <Enemy>[];
+    final hazards = <Rect>[];
     var scoreTotal = 0;
     const gy = G.groundY;
 
@@ -40,10 +41,11 @@ class LevelBuilder {
 
     PickupType rollReward() {
       final r = rnd.nextDouble();
-      if (r < 0.5) return PickupType.coin;
-      if (r < 0.62) return PickupType.heart;
-      if (r < 0.74) return PickupType.magnet;
-      if (r < 0.87) return PickupType.bolt;
+      if (r < 0.42) return PickupType.coin;
+      if (r < 0.54) return PickupType.heart;
+      if (r < 0.68) return PickupType.shield;
+      if (r < 0.78) return PickupType.magnet;
+      if (r < 0.90) return PickupType.bolt;
       return PickupType.potion;
     }
 
@@ -85,19 +87,22 @@ class LevelBuilder {
           }
         } else {
           final r = rnd.nextDouble();
-          if (r < 0.24) {
+          if (r < 0.20) {
             kind = 0;
             fw = 130;
-          } else if (r < 0.40) {
+          } else if (r < 0.34) {
             kind = 1;
             fw = 120;
-          } else if (r < 0.50) {
-            kind = 2;
-            fw = 100;
-          } else if (r < 0.58) {
+          } else if (r < 0.42) {
             kind = 3;
             fw = 120;
-          } else if (r < 0.80) {
+          } else if (r < 0.52) {
+            kind = 7;
+            fw = 200;
+          } else if (r < 0.62) {
+            kind = first ? 0 : 6;
+            fw = first ? 130 : 130;
+          } else if (r < 0.84) {
             kind = 4;
             pw = 110.0 + rnd.nextInt(50);
             fw = pw + 30;
@@ -123,10 +128,6 @@ class LevelBuilder {
               ));
             }
             arc(cx, gy - 38.0 * h - 30, 3);
-            break;
-          case 2:
-            solids.add(Solid(Rect.fromLTWH(cx - 17, gy - 39, 34, 39), SolidKind.barrel));
-            arc(cx, gy - 70, 3);
             break;
           case 3:
             solids.add(Solid(Rect.fromLTWH(cx - 44, gy - 33, 44, 33), SolidKind.stone));
@@ -164,6 +165,23 @@ class LevelBuilder {
               reward: reward,
             ));
             break;
+          case 6:
+            // Tikanlar: ustidan sakrab o'tish kerak
+            hazards.add(Rect.fromLTWH(cx - 24, gy - 30, 48, 30));
+            arc(cx, gy - 62, 3);
+            break;
+          case 7:
+            // Muz zinapoyasi: ustida sirpanchiq
+            for (int i = 0; i < 3; i++) {
+              solids.add(Solid(
+                Rect.fromLTWH(cx - 60 + i * 40.0, gy - 34, 40, 34),
+                SolidKind.ice,
+              ));
+            }
+            for (int i = 0; i < 3; i++) {
+              coin(cx - 40 + i * 40.0, gy - 62);
+            }
+            break;
           case 10:
             enemies.add(Enemy(EnemyType.slime,
                 x: cx - 22, y: gy - 36, w: 44, h: 36, minX: cx - 70, maxX: cx + 70, speed: 38));
@@ -179,7 +197,7 @@ class LevelBuilder {
             break;
           case 13:
             enemies.add(Enemy(EnemyType.bomb,
-                x: cx - 18, y: gy - 36, w: 36, h: 36, minX: cx - 18, maxX: cx + 18, speed: 0));
+                x: cx - 18, y: gy - 38, w: 36, h: 38, minX: cx - 18, maxX: cx + 18, speed: 0));
             arc(cx, gy - 58, 3);
             break;
         }
@@ -191,9 +209,22 @@ class LevelBuilder {
       x += segW;
     }
 
+    // Kalit: darajaning o'rtasidagi suzuvchi platformaga qo'yiladi
+    final platforms = solids.where((s) => s.kind == SolidKind.platform).toList();
+    final mid = (x + 0) * 0.55;
+    if (platforms.isNotEmpty) {
+      platforms.sort((a, b) =>
+          (a.rect.center.dx - mid).abs().compareTo((b.rect.center.dx - mid).abs()));
+      final p = platforms.first.rect;
+      pickups.add(Pickup(PickupType.key, p.center.dx, p.top - 38));
+    } else {
+      solids.add(Solid(Rect.fromLTWH(mid - 55, gy - 88, 110, 16), SolidKind.platform, oneWay: true));
+      pickups.add(Pickup(PickupType.key, mid, gy - 126));
+    }
+
     // Finish maydoni
     final hasBoss = index == G.levelCount - 1;
-    final endW = hasBoss ? 760.0 : 540.0;
+    final endW = hasBoss ? 760.0 : 600.0;
     solids.add(Solid(Rect.fromLTWH(x, gy, endW, 200), SolidKind.ground));
     arc(x + 120, gy - 30, 5);
     if (hasBoss) {
@@ -208,12 +239,16 @@ class LevelBuilder {
           hp: 5,
           boss: true));
     }
+    scoreTotal += 15; // sandiq mukofoti
+    final chestX = x + endW - 330;
 
     return LevelData(
       length: x + endW,
       solids: solids,
       pickups: pickups,
       enemies: enemies,
+      hazards: hazards,
+      chest: Rect.fromLTWH(chestX, gy - 38, 52, 38),
       hasBoss: hasBoss,
       goalX: x + endW - 200,
       scoreTotal: scoreTotal,

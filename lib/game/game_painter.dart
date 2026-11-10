@@ -36,7 +36,17 @@ class GamePainter extends CustomPainter {
     PickupType.magnet: 28,
     PickupType.bolt: 32,
     PickupType.potion: 32,
+    PickupType.key: 32,
+    PickupType.shield: 32,
   };
+
+  /// Poza ichida tananing gorizontal markazi (rasm kengligining ulushi).
+  static const Map<String, double> _anchor = {
+    'hero_attack': 0.42,
+    'hero_slide': 0.58,
+  };
+
+  static const double _heroScale = 0.295;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -59,7 +69,9 @@ class GamePainter extends CustomPainter {
     }
     canvas.translate(-w.camX, 0);
     _signs(canvas);
+    _chest(canvas);
     _solids(canvas, vw);
+    _hazards(canvas, vw);
     _pickups(canvas, vw);
     _enemies(canvas, vw);
     _hero(canvas);
@@ -135,6 +147,18 @@ class GamePainter extends CustomPainter {
     _img(c, Sprites.get('signpost'), Rect.fromLTWH(gx - 4, gy - 84 + bob, 84, 85));
   }
 
+  void _chest(Canvas c) {
+    final r = w.level.chest;
+    _img(c, Sprites.get('chest'), r, opacity: w.chestOpened ? 0.6 : 1.0);
+    if (w.chestOpened) {
+      final rise = math.min(w.chestT, 0.8) / 0.8;
+      final cy = r.top - 12 - rise * 30 + math.sin(w.time * 4) * 2;
+      _img(c, Sprites.get('crown'),
+          Rect.fromCenter(center: Offset(r.center.dx, cy), width: 40, height: 32),
+          opacity: 1.0);
+    }
+  }
+
   void _solids(Canvas c, double vw) {
     for (final s in w.level.solids) {
       final r = s.rect;
@@ -154,8 +178,8 @@ class GamePainter extends CustomPainter {
         case SolidKind.stone:
           _img(c, Sprites.get('stone'), r);
           break;
-        case SolidKind.barrel:
-          _img(c, Sprites.get('barrel'), r);
+        case SolidKind.ice:
+          _img(c, Sprites.get('ice'), r.inflate(0.5));
           break;
         case SolidKind.qblock:
           final off = s.bump > 0 ? -math.sin(s.bump / 0.2 * math.pi) * 9 : 0.0;
@@ -163,6 +187,14 @@ class GamePainter extends CustomPainter {
               paint: s.used ? _gray : null);
           break;
       }
+    }
+  }
+
+  void _hazards(Canvas c, double vw) {
+    final img = Sprites.get('spikes');
+    for (final z in w.level.hazards) {
+      if (z.right < w.camX - 60 || z.left > w.camX + vw + 60) continue;
+      _img(c, img, z.inflate(2));
     }
   }
 
@@ -205,7 +237,8 @@ class GamePainter extends CustomPainter {
         final f = e.hp / e.maxHp;
         c.drawRRect(
             RRect.fromRectAndRadius(
-                Rect.fromLTWH(bar.left, bar.top, bar.width * f, bar.height), const Radius.circular(4)),
+                Rect.fromLTWH(bar.left, bar.top, bar.width * f, bar.height),
+                const Radius.circular(4)),
             Paint()..color = const Color(0xFFE53935));
       }
     }
@@ -213,11 +246,13 @@ class GamePainter extends CustomPainter {
 
   void _hero(Canvas c) {
     final h = w.hero;
-    final img = Sprites.get(w.heroFrame);
-    final ww = img.width * 0.29;
-    final hh = img.height * 0.29;
+    final frame = w.heroFrame;
+    final img = Sprites.get(frame);
+    final ww = img.width * _heroScale;
+    final hh = img.height * _heroScale;
     final cx = h.x + G.heroW / 2;
     final feet = h.y + G.heroH + 1;
+    final ax = _anchor[frame] ?? 0.5;
 
     if (w.magnetT > 0) {
       final ring = Paint()
@@ -228,7 +263,7 @@ class GamePainter extends CustomPainter {
     }
 
     // Oyoq ostidagi yumshoq soya
-    if (h.onGround) {
+    if (h.onGround && !w.dying) {
       c.drawOval(
         Rect.fromCenter(center: Offset(cx, feet - 1), width: 30, height: 6),
         Paint()..color = const Color(0x2E000000),
@@ -236,7 +271,7 @@ class GamePainter extends CustomPainter {
     }
 
     // Squash & stretch + yugurish tebranishi
-    double sx = 1, sy = 1, bob = 0;
+    double sx = 1, sy = 1, bob = 0, wobble = 0;
     final speedK = (h.vx.abs() / G.runSpeed).clamp(0.0, 1.4).toDouble();
     if (h.landT > 0) {
       final k = h.landT / 0.14;
@@ -246,9 +281,12 @@ class GamePainter extends CustomPainter {
       final st = (-h.vy / 2600).clamp(-0.08, 0.12).toDouble();
       sy = 1 + st;
       sx = 1 - st * 0.6;
-    } else if (h.vx.abs() > 12 && !h.skid) {
-      bob = math.sin(h.stride * math.pi / 2).abs() * 2.6 * speedK;
-    } else {
+    } else if (frame == 'hero_run') {
+      final ph = math.sin(h.stride * math.pi / 2);
+      bob = ph.abs() * 3.0 * speedK;
+      wobble = ph * 0.05 * speedK;
+      sy = 1 + (0.5 - ph.abs()) * 0.05 * speedK;
+    } else if (frame == 'hero_idle') {
       sy = 1 + math.sin(w.time * 3) * 0.012; // nafas olish
     }
 
@@ -260,11 +298,26 @@ class GamePainter extends CustomPainter {
 
     c.save();
     c.translate(cx, feet - bob);
-    c.rotate(h.lean);
+    c.rotate(h.lean + wobble);
     c.scale(sx * h.visFacing, sy);
     final src = Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble());
-    c.drawImageRect(img, src, Rect.fromLTWH(-ww / 2, -hh, ww, hh), p);
+    c.drawImageRect(img, src, Rect.fromLTWH(-ww * ax, -hh, ww, hh), p);
     c.restore();
+
+    // Qalqon pufagi
+    if (w.shield && !w.dying) {
+      final pulse = 1 + math.sin(w.time * 5) * 0.04;
+      final center = Offset(cx, h.cy);
+      c.drawCircle(center, 38 * pulse, Paint()..color = const Color(0x2655C8FF));
+      c.drawCircle(
+        center,
+        38 * pulse,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5
+          ..color = const Color(0xAA7FDBFF),
+      );
+    }
   }
 
   void _particles(Canvas c) {

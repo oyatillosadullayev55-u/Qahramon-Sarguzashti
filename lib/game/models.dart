@@ -2,13 +2,13 @@ import 'dart:ui';
 
 import '../core/constants.dart';
 
-enum SolidKind { ground, platform, crate, stone, barrel, qblock }
+enum SolidKind { ground, platform, crate, stone, ice, qblock }
 
-enum PickupType { coin, star, gem, heart, magnet, bolt, potion }
+enum PickupType { coin, star, gem, heart, magnet, bolt, potion, key, shield }
 
 enum EnemyType { slime, turtle, ghost, bomb }
 
-/// Qattiq to'siq: yer, platforma, quti, tosh, bochka, "?" blok.
+/// Qattiq to'siq: yer, platforma, quti, tosh, muz, "?" blok.
 class Solid {
   Solid(this.rect, this.kind, {this.oneWay = false, this.reward});
 
@@ -79,25 +79,41 @@ class Hero {
   double vx = 0;
   double vy = 0;
   bool onGround = false;
+  bool onIce = false;
   double facing = 1;
   double coyote = 0;
   double jumpBuf = 0;
   bool jumpCut = false;
   double invul = 0;
-  double animT = 0;
   double respawnX = 60;
   double prevBottom = G.groundY;
 
+  // Jang holatlari
+  double attackT = 0;
+  double attackCd = 0;
+  double slideT = 0;
+  double slideCd = 0;
+  double hurtT = 0;
+
   // Animatsiya holati
-  double visFacing = 1; // burilish animatsiyasi uchun (-1..1)
-  double stride = 0; // bosilgan masofaga bog'liq qadam fazasi
-  double lean = 0; // tana og'ishi (radian)
-  double landT = 0; // yerga tushgandagi "ezilish"
-  bool skid = false; // tormozlanib sirpanish
+  double visFacing = 1;
+  double stride = 0;
+  double lean = 0;
+  double landT = 0;
+  bool skid = false;
   int stepIdx = 0;
   double dustT = 0;
 
   Rect get rect => Rect.fromLTWH(x, y, G.heroW, G.heroH);
+
+  /// Sirpanganda faqat pastki qismi zarar oladi (arvohlar tepadan o'tib ketadi).
+  Rect get hurtRect =>
+      slideT > 0 ? Rect.fromLTWH(x - 4, y + G.heroH - 28, G.heroW + 8, 28) : rect;
+
+  Rect get attackRect => facing >= 0
+      ? Rect.fromLTWH(x + G.heroW - 6, y - 6, 62, G.heroH + 8)
+      : Rect.fromLTWH(x - 56, y - 6, 62, G.heroH + 8);
+
   double get cx => x + G.heroW / 2;
   double get cy => y + G.heroH / 2;
 }
@@ -108,6 +124,8 @@ class LevelData {
     required this.solids,
     required this.pickups,
     required this.enemies,
+    required this.hazards,
+    required this.chest,
     required this.goalX,
     required this.scoreTotal,
     required this.bg,
@@ -118,6 +136,8 @@ class LevelData {
   final List<Solid> solids;
   final List<Pickup> pickups;
   final List<Enemy> enemies;
+  final List<Rect> hazards; // tikanlar
+  final Rect chest;
   final double goalX;
   final int scoreTotal;
   final String bg;

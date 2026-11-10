@@ -26,7 +26,7 @@ class OyinApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Sarguzasht',
+      title: 'Super Adventure',
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.orange),
       home: const MenuScreen(),
     );

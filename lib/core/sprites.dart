@@ -7,13 +7,18 @@ class Sprites {
   Sprites._();
 
   static const List<String> names = [
-    'hero_idle', 'hero_run1', 'hero_run2', 'hero_run3', 'hero_jump',
-    'coin', 'star', 'heart', 'gem', 'qblock', 'magnet', 'bolt', 'potion',
-    'grass_l', 'grass_m', 'grass_s', 'stone', 'crate', 'barrel', 'signpost',
-    'btn_play', 'btn_pause', 'btn_restart', 'btn_home',
+    // qahramon pozalari
+    'hero_idle', 'hero_run', 'hero_jump', 'hero_attack', 'hero_hurt',
+    'hero_die', 'hero_slide', 'hero_celebrate',
+    // yig'iladigan narsalar
+    'coin', 'star', 'heart', 'gem', 'key', 'shield', 'magnet', 'bolt', 'potion',
+    'qblock', 'chest', 'crown',
+    // to'siqlar
+    'grass_l', 'grass_s', 'stone', 'crate', 'ice', 'spikes', 'signpost',
+    // dushmanlar
     'slime', 'turtle', 'ghost', 'bomb',
-    'bg_day', 'bg_night', 'bg_forest',
-    'plank', 'level_complete', 'scroll', 'stars_bar', 'game_over',
+    // fonlar
+    'bg_day', 'bg_night', 'bg_forest', 'bg_env',
   ];
 
   static final Map<String, ui.Image> _images = {};

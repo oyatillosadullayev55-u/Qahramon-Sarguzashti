@@ -1,11 +1,75 @@
 import 'package:flutter/material.dart';
 
+import '../core/progress.dart';
 import '../core/sprites.dart';
 import '../widgets/common.dart';
+import '../widgets/panels.dart';
 import 'level_select_screen.dart';
 
-class MenuScreen extends StatelessWidget {
+class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
+
+  @override
+  State<MenuScreen> createState() => _MenuScreenState();
+}
+
+class _MenuScreenState extends State<MenuScreen> {
+  Future<void> _play() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const LevelSelectScreen()),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Widget _profile() {
+    final lvl = Progress.playerLevel;
+    final frac = (Progress.totalStars % 3) / 3.0;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(4, 4, 16, 4),
+      decoration: BoxDecoration(
+        color: const Color(0xAA0A1633),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withAlpha(50), width: 1.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const HeroAvatar(size: 44),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(Progress.playerName,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 14, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Lv. $lvl',
+                      style: const TextStyle(color: Color(0xFFBFD0FF), fontSize: 11)),
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    width: 44,
+                    height: 6,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: frac == 0 ? 0.08 : frac,
+                        backgroundColor: const Color(0x55FFFFFF),
+                        valueColor: const AlwaysStoppedAnimation(Color(0xFFFFB02E)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,82 +78,99 @@ class MenuScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Image.asset(Sprites.path('bg_day'), fit: BoxFit.cover),
+          Image.asset(Sprites.path('bg_env'), fit: BoxFit.cover),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x66050B22), Color(0x99050B22)],
+              ),
+            ),
+          ),
           SafeArea(
-            child: Row(
+            child: Stack(
               children: [
-                Expanded(
-                  flex: 5,
-                  child: Center(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const OutlinedText('SARGUZASHT', size: 54),
-                          const SizedBox(height: 2),
-                          const OutlinedText("Platformer o'yini", size: 18, stroke: Color(0xFF1F4D7A)),
-                          const SizedBox(height: 18),
-                          ImgButton(
-                            asset: 'btn_play',
-                            size: 110,
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const LevelSelectScreen()),
+                Row(
+                  children: [
+                    // Chap: qahramon portreti
+                    Expanded(
+                      flex: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 60, 8, 14),
+                        child: Center(
+                          child: AspectRatio(
+                            aspectRatio: 624 / 736,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: const Color(0xFF3A5DB8), width: 2.5),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0x884B7BFF), blurRadius: 18),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(17),
+                                child: Image.asset(Sprites.path('portrait'), fit: BoxFit.cover),
+                              ),
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
+                    // O'ng: logo va tugmalar
+                    Expanded(
+                      flex: 6,
+                      child: Center(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Image.asset(Sprites.path('logo'), width: 340),
+                              const SizedBox(height: 14),
+                              ImgButton(asset: 'btn_playbig', size: 220, onTap: _play),
+                              const SizedBox(height: 14),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  ImgButton(
+                                      asset: 'btn_settings',
+                                      size: 62,
+                                      onTap: () => showSettings(context)),
+                                  const SizedBox(width: 22),
+                                  ImgButton(
+                                      asset: 'btn_trophy',
+                                      size: 62,
+                                      onTap: () => showRecords(context)),
+                                  const SizedBox(width: 22),
+                                  ImgButton(
+                                      asset: 'btn_stats',
+                                      size: 62,
+                                      onTap: () => showStats(context)),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                Expanded(
-                  flex: 4,
-                  child: LayoutBuilder(
-                    builder: (context, c) {
-                      final h = c.maxHeight;
-                      return Stack(
-                        clipBehavior: Clip.hardEdge,
-                        children: [
-                          Positioned(
-                            bottom: -h * 0.12,
-                            left: 0,
-                            right: 0,
-                            child: Center(
-                              child: Image.asset(Sprites.path('grass_l'), width: h * 0.95),
-                            ),
-                          ),
-                          Positioned(
-                            bottom: h * 0.28,
-                            left: c.maxWidth * 0.12,
-                            child: Image.asset(Sprites.path('hero_idle'), height: h * 0.36),
-                          ),
-                          Positioned(
-                            bottom: h * 0.28,
-                            right: c.maxWidth * 0.12,
-                            child: Image.asset(Sprites.path('slime'), width: h * 0.2),
-                          ),
-                          Positioned(
-                            bottom: h * 0.7,
-                            left: c.maxWidth * 0.3,
-                            child: Image.asset(Sprites.path('coin'), width: h * 0.1),
-                          ),
-                          Positioned(
-                            bottom: h * 0.62,
-                            right: c.maxWidth * 0.3,
-                            child: Image.asset(Sprites.path('star'), width: h * 0.11),
-                          ),
-                        ],
-                      );
-                    },
+                Positioned(left: 12, top: 8, child: _profile()),
+                Positioned(
+                  right: 12,
+                  top: 8,
+                  child: Row(
+                    children: [
+                      StatPill(asset: 'coin', value: '${Progress.coins}'),
+                      const SizedBox(width: 8),
+                      StatPill(asset: 'gem', value: '${Progress.gems}'),
+                    ],
                   ),
                 ),
               ],
             ),
-          ),
-          const Positioned(
-            right: 12,
-            top: 8,
-            child: SafeArea(child: SoundToggle()),
           ),
         ],
       ),
